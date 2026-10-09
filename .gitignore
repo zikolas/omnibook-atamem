@@ -1,0 +1,8 @@
+# ROM card images and memory/card dumps are HP's or the user's data: never commit
+*.img
+*.IMG
+*.bin
+*.BIN
+dumps/
+notes/
+.DS_Store
