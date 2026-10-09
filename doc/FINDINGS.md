@@ -269,4 +269,8 @@ write-protected (GetStatus DL=C1h).
 
 Dump the original card, patch the image file and write the result on a
 machine with a standard PC Card controller that supplies 12V (an IBM PC110
-running LINGO was used here), then move the card to the 425.
+running LINGO was used here), then move the card to the 425. LINGO's
+[OmniBook notes][lingo-ob] describe the ROM card's format, the cards known to
+boot the 425 and the cloning procedure.
+
+[lingo-ob]: https://github.com/zikolas/lingo/blob/main/doc/OMNIBOOK.md

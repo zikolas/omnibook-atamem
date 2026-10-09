@@ -35,6 +35,8 @@ CM-32L all working), and 15 cards in a user slot (see
   accepts in its ROM slot to write the patched image to. The PRETEC
   FR2016 (16MB, Intel 28F008SA flash) is known to boot the 425.
   [LINGO](https://github.com/zikolas/lingo) reads and writes both.
+  LINGO's [OmniBook notes][lingo-ob] cover which flash cards boot the 425,
+  how to read the card size from its header, and how to dump and clone it.
 - Python 3, or a DOS machine with a 386 or later, to run the patcher.
 
 The patcher contains no HP code. It works only on an image you dump from
@@ -82,8 +84,9 @@ The ROM card cannot be rewritten in the 425 itself. The 425 runs its BIOS and
 ROM DOS directly from that card, the Intel flash cards that boot it need 12V
 to program, and no OmniBook slot is known to supply it. Dump, patch and write
 the card on another machine with a standard PC Card controller (for example
-an IBM PC110 with LINGO), then move it to the 425. Keep the original HP ROM
-card: swapping it back restores the stock machine.
+an IBM PC110 with LINGO; see "Cloning a card" in LINGO's
+[OmniBook notes][lingo-ob-clone]), then move it to the 425. Keep the original
+HP ROM card: swapping it back restores the stock machine.
 
 ## Cards that work
 
@@ -135,3 +138,6 @@ Version 1.0 (obpatch.py and OBPATCH 1.0), experimental. Known gaps:
 
 MIT, see [LICENSE](LICENSE). HP's ROM card contents remain HP's; this
 project distributes only the patch.
+
+[lingo-ob]: https://github.com/zikolas/lingo/blob/main/doc/OMNIBOOK.md
+[lingo-ob-clone]: https://github.com/zikolas/lingo/blob/main/doc/OMNIBOOK.md#cloning-a-card
