@@ -4,6 +4,25 @@ A ROM card patch for the HP OmniBook 425 that lets any PC Card ATA or
 CompactFlash card run in memory mode, in the internal C: drive slot and in
 the two user slots.
 
+## TL;DR
+
+- Stock 425: only HP's SanDisk flash cards get memory mode. Any other ATA or
+  CF card as C: runs in 16-bit I/O mode, and 8-bit sound and MIDI cards in
+  the user slots then lose their odd registers.
+- The patch: up to 65 bytes in OBCBIOS, the PC Card module on the ROM card,
+  in five selectable parts. Non-SanDisk ATA/CF cards then run in memory
+  mode, cards of 4GB and up work with a 2GB partition, and the 8-bit cards
+  work beside them. Card results are in [doc/CARDS.md](doc/CARDS.md).
+- How: dump your ROM card, run `obpatch.py` (modern machine) or `OBPATCH.COM`
+  (DOS, 386+) on the image, and write it to a linear flash card such as a
+  PRETEC FR2016 on another machine with
+  [LINGO](https://github.com/zikolas/lingo). The 425 cannot write the ROM
+  card it runs from.
+- Cards: MBR, one active FAT12/FAT16 partition (type 01 or 06), 2GB or
+  smaller.
+- Option 6, separate and optional: a 4-byte patch to `C:\OBMGM.COM` that
+  stops the "Unrecognized Plug-in Card" popup. It runs on the 425.
+
 This patch is experimental and has seen limited testing: one OmniBook 425,
 one ROM card build, one card booted as C: in memory mode, and 15 cards tried
 in a user slot. It changes the firmware the 425 runs at power-on. Keep your
