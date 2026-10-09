@@ -105,6 +105,10 @@ With the patch, a card works as a drive when its partition layout suits the
 FAT32, exFAT and GPT cards need repartitioning and a FAT16 format first.
 Cards larger than 2GB work with a 2GB partition at the start.
 
+Setting a card up as C: (HP's first-boot format prompt, OBSETUP, and the
+OBBOOT settings that turn the Flash File System and DoubleSpace on and off)
+is covered in [doc/C-DRIVE.md](doc/C-DRIVE.md).
+
 ## What the patch changes
 
 | Part | Module offset | Change |
