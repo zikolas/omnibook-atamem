@@ -16,6 +16,8 @@ The patcher finds OBCBIOS through the card's own directory, checks it is the
 exact stock build, applies the chosen patches to a copy and checks the
 result against the known CRC for that combination. It never changes the
 input file and contains no HP code.
+
+Experimental, limited testing: keep your original ROM card and dump.
 """
 
 import struct
@@ -145,6 +147,8 @@ def main(argv):
         print(__doc__.strip().split("\n\n")[1])
         print()
         print(__doc__.strip().split("\n\n")[2])
+        print()
+        print(__doc__.strip().split("\n\n")[-1])
         return 2
 
     src = args[0]

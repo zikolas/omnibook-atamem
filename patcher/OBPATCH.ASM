@@ -358,7 +358,8 @@ out0:   call say
 m_title db 'OBPATCH 1.0 - HP OmniBook 425 ROM card: ATA cards in memory mode'
 crlf    db 13, 10, '$'
 m_use   db 'Usage: OBPATCH romcard.img   (patches the file in place)', 13, 10
-        db 'Keep a copy of the original image. Needs a 386 or later.', 13, 10, '$'
+        db 'Keep a copy of the original image. Needs a 386 or later.', 13, 10
+        db 'Experimental, limited testing: keep your original ROM card.', 13, 10, '$'
 m_stock db 'Stock 425 OBCBIOS found in $'
 m_already db 'This image is already patched with:', 13, 10, '  $'
 m_redo  db 'To apply a different set, start from your original image.', 13, 10, '$'
@@ -381,6 +382,7 @@ m_help  db '1 anycard: without it, only SanDisk cards get memory mode. Other', 1
         db '5 nosetfeatures: the IBM Microdrive aborts everything after these', 13, 10
         db '  SanDisk commands. Their effect on SanDisk cards is not known.', 13, 10
         db 'Recommended: 1-3 always; 4 and 5 if you use those cards.', 13, 10
+        db 'Experimental, limited testing: keep your original ROM card.', 13, 10
         db 13, 10, 'Press a key to go back to the menu.$'
 m_none  db 13, 10, 'Nothing selected. $'
 m_ask1  db 'Patch $'

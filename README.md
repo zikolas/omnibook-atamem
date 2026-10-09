@@ -4,6 +4,12 @@ A ROM card patch for the HP OmniBook 425 that lets any PC Card ATA or
 CompactFlash card run in memory mode, in the internal C: drive slot and in
 the two user slots.
 
+This patch is experimental and has seen limited testing: one OmniBook 425,
+one ROM card build, one card booted as C: in memory mode, and 15 cards tried
+in a user slot. It changes the firmware the 425 runs at power-on. Keep your
+original HP ROM card and an unmodified dump of it, and use the patch at your
+own risk.
+
 On a stock 425 only HP's own SanDisk-made flash disks get memory mode. Every
 other ATA card in the C: slot is driven in 16-bit I/O mode at 1F0h/3F6h, and
 while that I/O window is live the odd-numbered registers of 8-bit cards in
@@ -12,9 +18,9 @@ SanDisk cards are worse off: they get memory mode with a size of zero and the
 drive is unusable.
 
 The patch changes up to 65 bytes, in five selectable parts, inside OBCBIOS,
-the PC Card module the 425 BIOS loads from the ROM card at power-on. With it, a non-SanDisk C: drive runs in
-memory mode, no I/O window is left in the C: slot, and 8-bit sound and MIDI
-cards work beside it.
+the PC Card module the 425 BIOS loads from the ROM card at power-on. With it,
+a non-SanDisk C: drive runs in memory mode, no I/O window is left in the C:
+slot, and 8-bit sound and MIDI cards work beside it.
 
 Tested on a 425 with a 128MB CompactFlash C: drive in memory mode, an EXP
 GAME/MIDI card in a user slot (scratch register, line status and MIDI out to a
@@ -112,7 +118,7 @@ The full analysis, with the evidence for each change, is in
 
 ## Status
 
-Version 1.0 (obpatch.py and OBPATCH 1.0). Known gaps:
+Version 1.0 (obpatch.py and OBPATCH 1.0), experimental. Known gaps:
 
 - The German `1.1S ABD` card is untested. The patcher checks the module CRC
   and will refuse it if it differs.
