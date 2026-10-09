@@ -53,7 +53,9 @@ of 593,024 bytes (579K) with nothing else loaded.
 Notes:
 
 - C2 and C3 need an uncompressed C:. On a DoubleSpace card, C2 shows the raw
-  host drive instead of your files.
+  host drive instead of your files. With C3 the boot from C: fails; the 425
+  then sets OBBOOT back to C0 by itself and reboots from D:, reporting
+  "Drive C does not contain a recognizable mass storage device".
 - In C1 and C3 there is no D:. Copy anything you still need from D: first
   (OBBOOT.COM itself, MEM, CHKDSK and so on), and switch back to C0 when you
   need D:.

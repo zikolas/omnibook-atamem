@@ -24,6 +24,14 @@ the same card worked.
 So the question was why one ATA card gets memory mode and another I/O mode,
 and whether the choice can be changed.
 
+The OmniBook 430 has the same controller and the same problem. Its ROM card
+forces the C: slot into I/O mode for every card, and with a Maxtor 105MB or
+131MB hard disk as C: its socket 3 control register read 7Dh: bit 0 set,
+16-bit (bit 2 is the shared 12V Vpp switch). HP sold the 430 only with hard
+disks, so a stock 430 always has this problem. The 425's 105MB, 131MB and
+OmniBook 600 hard disks also ran 16-bit I/O on its stock ROM card; see
+[CARDS.md](CARDS.md).
+
 ## 2. Where the decision is made: OBCBIOS on the ROM card
 
 The 425's F000 segment is the top 64K of the first 8MB of the ROM card (card

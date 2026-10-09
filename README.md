@@ -1,8 +1,8 @@
 # omnibook-atamem
 
-A ROM card patch for the HP OmniBook 425 that lets any PC Card ATA or
-CompactFlash card run in memory mode, in the internal C: drive slot and in
-the two user slots.
+A ROM card patch for the HP OmniBook 425 that lets CompactFlash and other
+flash ATA cards run in memory mode, in the internal C: drive slot and in the
+two user slots. PC Card hard disks stay in I/O mode (see Status).
 
 ## TL;DR
 
@@ -10,9 +10,10 @@ the two user slots.
   CF card as C: runs in 16-bit I/O mode, and 8-bit sound and MIDI cards in
   the user slots then lose their odd registers.
 - The patch: up to 65 bytes in OBCBIOS, the PC Card module on the ROM card,
-  in five selectable parts. Non-SanDisk ATA/CF cards then run in memory
-  mode, cards of 4GB and up work with a 2GB partition, and the 8-bit cards
-  work beside them. Card results are in [doc/CARDS.md](doc/CARDS.md).
+  in five selectable parts. Non-SanDisk CF and flash ATA cards then run in
+  memory mode, cards of 4GB and up work with a 2GB partition, and the 8-bit
+  cards work beside them. PC Card hard disks stay in 16-bit I/O mode. Card
+  results are in [doc/CARDS.md](doc/CARDS.md).
 - How: dump your ROM card, run `obpatch.py` (modern machine) or `OBPATCH.COM`
   (DOS, 386+) on the image, and write it to a linear flash card such as a
   PRETEC FR2016 on another machine with
@@ -38,8 +39,8 @@ drive is unusable.
 
 The patch changes up to 65 bytes, in five selectable parts, inside OBCBIOS,
 the PC Card module the 425 BIOS loads from the ROM card at power-on. With it,
-a non-SanDisk C: drive runs in memory mode, no I/O window is left in the C:
-slot, and 8-bit sound and MIDI cards work beside it.
+a non-SanDisk CompactFlash or flash ATA C: drive runs in memory mode, no I/O
+window is left in the C: slot, and 8-bit sound and MIDI cards work beside it.
 
 Tested on a 425 with a 128MB CompactFlash C: drive in memory mode, an EXP
 GAME/MIDI card in a user slot (scratch register, line status and MIDI out to a
@@ -186,6 +187,12 @@ Known gaps:
   C:\OBMGM.COM on the 425, and after a reboot an SCP-55 removed and
   re-inserted with the machine on gave no popup and still enabled with
   SCP55GO.
+- PC Card hard disks stay in 16-bit I/O mode, so the odd-register problem
+  remains with them. A Maxtor MXL-105-III (HP's 105MB option for the
+  OmniBook 430) ran 16-bit I/O on the stock and the patched 425 ROM card,
+  and so did a Maxtor 131MB and an OmniBook 600 drive on the stock card.
+  The reason is not known yet; their CIS could not be read in the C: slot.
+  See [doc/CARDS.md](doc/CARDS.md).
 - HP's per-sector error check during reads and writes can never fire (it
   uses `test` and then `jc`). A sector the card reports as bad reaches DOS
   as data. The patch does not change this.

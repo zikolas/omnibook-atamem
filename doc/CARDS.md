@@ -38,6 +38,28 @@ I/O-mode IDE path also addresses the drive by cylinder, head and sector, so
 cards with more than 1024 cylinders are likely limited to about 500MB as C:
 there (not tested).
 
+## Hard disks in the C: slot
+
+These were booted as C: and checked with VLWIN (socket 3 control register
+34h: 79h or 7Dh = bit 0 set, a 16-bit I/O window at 1F0h/3F6h). On the 430
+ROM card the extra bit 2 in 7Dh is the shared 12V Vpp switch, not width.
+
+| Drive | Stock 425 ROM card | Patched 425 ROM card | 430 ROM card |
+|---|---|---|---|
+| Maxtor MXL-105-III (HP's 105MB 430 option, 810/15/17) | 16-bit I/O, boots | 16-bit I/O, boots | 16-bit I/O, works |
+| Maxtor 131MB (from an OmniBook 530) | 16-bit I/O, works | not tried | 16-bit I/O, works |
+| OmniBook 600 drive | 16-bit I/O, works | not tried | not tried |
+
+None of them reached memory mode, and none ran 8-bit, so every one leaves
+the odd-register problem in place. Their CIS could not be read in the C:
+slot (the socket returns a constant byte once HP has set it up), so which
+memory-mode gate they fail is not known yet. Reading them from a user slot
+is the next step.
+
+The MXL-105-III has 17 sectors per track, an odd count. HP's memory-mode
+IDENTIFY check (FINDINGS section 4) would give it size 0; its I/O-mode
+path does not have that bug, so the drive works.
+
 The Hitachi microdrive reported "present, not ready" (Socket Services
 GetStatus DL=80h) and never answered; no ROM code runs for it. Whether that
 comes from its iPod firmware or from the slot's spin-up current is not known.
