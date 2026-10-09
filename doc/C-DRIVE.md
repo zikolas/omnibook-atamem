@@ -62,6 +62,8 @@ Notes:
   boot setting, run `OBBOOT` directly.
 - To see the current setting, run `OBBOOT` with no parameters. The comment
   at the top of a CONFIG.SYS is no evidence of it.
+- `OBMGM.COM`, loaded from CONFIG.SYS, shows HP's card popups. Option 6 in
+  the README removes its "Unrecognized Plug-in Card" popup.
 
 ## With the patch
 

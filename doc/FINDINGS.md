@@ -209,10 +209,10 @@ These limits sit above OBCBIOS and the patch leaves them alone:
 | Layout | Result |
 |---|---|
 | MBR, active (80h), type 06 or 01 | works |
-| active, type 07 | "Unrecognised" |
-| active, type 0Eh (FAT16 LBA) | "Unrecognised" |
-| inactive (00h), type 06 | "Unrecognised" |
-| GPT (protective MBR, type EEh) | "Unrecognised" |
+| active, type 07 | "Unrecognized" |
+| active, type 0Eh (FAT16 LBA) | "Unrecognized" |
+| inactive (00h), type 06 | "Unrecognized" |
+| GPT (protective MBR, type EEh) | "Unrecognized" |
 | FAT32 volume | "Invalid media type" |
 | FAT16, 6 reserved sectors, 255 heads | "Invalid media type" |
 | FAT16, 1 reserved sector, 16 heads | works |
@@ -272,5 +272,31 @@ machine with a standard PC Card controller that supplies 12V (an IBM PC110
 running LINGO was used here), then move the card to the 425. LINGO's
 [OmniBook notes][lingo-ob] describe the ROM card's format, the cards known to
 boot the 425 and the cloning procedure.
+
+## 13. The "Unrecognized Plug-in Card" popup (OBMGM.COM)
+
+The popup that appears when a card is inserted that HP's software does not
+know comes from `OBMGM.COM`, the OmniBook message manager, which CONFIG.SYS
+loads from C:. It is not part of OBCBIOS. Enablers for third-party cards
+(sound, MIDI, serial) bring those cards up after the popup has been shown,
+so on a 425 used with such cards it appears on every insertion.
+
+OBMGM 1.03 (22,341 bytes, CRC-32 8AAE549Bh) picks a message with a
+seven-way jump table (file offset 4AE5h, in memory 4BE5h). Cases 0 and 1
+are the "Unrecognized Plug-in Card" message for the two user slots; the
+others are HP's modem and card messages. Each case pushes a message
+pointer and calls the display routine, then falls into the selector's exit
+at 4C1Dh. Pointing cases 0 and 1 at the exit (`F8 4B FD 4B` to
+`1D 4C 1D 4C`) drops only that message. The patched file has CRC-32
+2F9D6F3Bh.
+
+Tested on the 425, first by patching the resident copy in memory and then
+by running OBPATCH 1.1 on C:\OBMGM.COM on the 425 itself and rebooting: no
+popup on re-inserting the SCP-55 with the machine on, and SCP55GO still
+brought the card up. Card
+insertion is handled by Card Services, not by OBMGM, so cards are set up as
+before. The only change is that a card HP rejects (for example a CF card
+with an inactive or type 07 partition, section 9) no longer says so; the
+slot just stays empty.
 
 [lingo-ob]: https://github.com/zikolas/lingo/blob/main/doc/OMNIBOOK.md

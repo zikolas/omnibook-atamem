@@ -8,6 +8,11 @@
 ; (CRC-32 590D344E), recognises already patched images, asks before writing
 ; and checks the result against the known CRC for the chosen combination.
 ;
+;   OBPATCH C:\OBMGM.COM
+;
+; Given OBMGM.COM 1.03 (22341 bytes, CRC-32 8AAE549B) instead, it offers
+; option 6, nopopup: no "Unrecognized Plug-in Card" popup (4 bytes).
+;
 ; Build: nasm -f bin -o OBPATCH.COM OBPATCH.ASM        (runs on a 386 or later)
 ; Test builds: -DTESTMASK=n patches combination n (bit mask 1-31) without
 ; prompts; -DDIR_TOP=x -DDIR_FLOOR=y moves the directory search for small
@@ -21,6 +26,8 @@ DIR_FLOOR equ 7F4000h
 %endif
 MOD_LEN   equ 3A2Bh
 NOPT      equ 5
+MGM_LEN   equ 22341
+MGM_SITE  equ 4AE5h
 
 start:
         mov  si, 81h                  ; filename -> fname (ASCIIZ + '$')
@@ -46,7 +53,18 @@ start:
         int  21h
         jc   e_open
         mov  [handle], ax
-
+        mov  ax, 4202h                ; OBMGM.COM is told apart by its size
+        mov  bx, [handle]
+        xor  cx, cx
+        xor  dx, dx
+        int  21h
+        jc   e_read
+        or   dx, dx
+        jnz  .rom
+        cmp  ax, MGM_LEN
+        jne  .rom
+        jmp  mgm
+.rom:
         mov  dword [dirpos], DIR_TOP  ; walk the directory downward
 .dir:   mov  eax, [dirpos]
         cmp  eax, DIR_FLOOR
@@ -238,6 +256,68 @@ dopatch:
         mov  dx, m_lingo
         jmp  out0
 
+; --- OBMGM.COM: option 6, nopopup ----------------------------------------
+mgm:    xor  eax, eax
+        call seek
+        jc   e_read
+        mov  cx, MGM_LEN
+        mov  dx, buf
+        call read
+        jc   e_read
+        mov  cx, MGM_LEN
+        call crcn
+        cmp  eax, 2F9D6F3Bh
+        jne  .nd
+        mov  dx, m_mgmhas
+        jmp  close0
+.nd:    cmp  eax, 8AAE549Bh
+        jne  e_mgmcrc
+        mov  dx, m_mgm
+        call say
+%ifndef TESTMASK
+        mov  dx, m_mgmask
+        call say
+.yn:    mov  ah, 0
+        int  16h
+        and  al, 0DFh
+        cmp  al, 'N'
+        je   e_quit
+        cmp  al, 'Y'
+        jne  .yn
+        mov  dx, crlf
+        call say
+%endif
+        mov  si, mgmold
+        mov  di, buf+MGM_SITE
+        mov  cx, 4
+        repe cmpsb
+        jne  e_old
+        mov  si, mgmnew
+        mov  di, buf+MGM_SITE
+        mov  cx, 4
+        rep  movsb
+        mov  cx, MGM_LEN
+        call crcn
+        cmp  eax, 2F9D6F3Bh
+        jne  e_int
+        mov  eax, MGM_SITE
+        call seek
+        jc   e_write
+        mov  ah, 40h
+        mov  bx, [handle]
+        mov  cx, 4
+        mov  dx, mgmnew
+        int  21h
+        jc   e_write
+        cmp  ax, 4
+        jne  e_write
+        mov  ah, 3Eh
+        mov  bx, [handle]
+        int  21h
+        jc   e_write
+        mov  dx, m_mgmok
+        jmp  out0
+
 ; --- helpers --------------------------------------------------------------
 seek:                                 ; EAX = file offset -> CF
         mov  dx, ax
@@ -259,8 +339,9 @@ read:                                 ; CX bytes to DS:DX -> CF on short read
         stc
 .r:     ret
 crcbuf:                               ; EAX = CRC-32 of buf[0..MOD_LEN)
-        mov  si, buf
         mov  cx, MOD_LEN
+crcn:                                 ; EAX = CRC-32 of buf[0..CX)
+        mov  si, buf
         mov  edx, 0FFFFFFFFh
 .b:     lodsb
         xor  dl, al
@@ -336,6 +417,8 @@ e_old:  mov  dx, m_old
         jmp  short close1
 e_int:  mov  dx, m_int
         jmp  short close1
+e_mgmcrc: mov dx, m_mgmcrc
+        jmp  short close1
 e_write: mov dx, m_write
 close1: push dx
         mov  ah, 3Eh
@@ -355,10 +438,11 @@ out0:   call say
         int  21h
 
 ; --- text (every printed line fits 79 columns) ----------------------------
-m_title db 'OBPATCH 1.0 - HP OmniBook 425 ROM card: ATA cards in memory mode'
+m_title db 'OBPATCH 1.1 - HP OmniBook 425 ROM card: ATA cards in memory mode'
 crlf    db 13, 10, '$'
 m_use   db 'Usage: OBPATCH romcard.img   (patches the file in place)', 13, 10
-        db 'Keep a copy of the original image. Needs a 386 or later.', 13, 10
+        db '       OBPATCH C:\OBMGM.COM  (option 6: no unrecognized-card popup)', 13, 10
+        db 'Keep a copy of the original file. Needs a 386 or later.', 13, 10
         db 'Experimental, limited testing: keep your original ROM card.', 13, 10, '$'
 m_stock db 'Stock 425 OBCBIOS found in $'
 m_already db 'This image is already patched with:', 13, 10, '  $'
@@ -372,7 +456,7 @@ m_o5    db ' 5 [x] nosetfeatures skip SanDisk SET FEATURES (IBM Microdrive fix) 
 m_keys  db 13, 10, '1-5 toggle, H help, P patch, Q quit: $'
 m_help  db '1 anycard: without it, only SanDisk cards get memory mode. Other', 13, 10
         db '  cards run C: in I/O mode (8-bit cards lose odd ports) and are', 13, 10
-        db '  "Unrecognised" in the user slots.', 13, 10
+        db '  "Unrecognized" in the user slots.', 13, 10
         db '2 sectors63: HP tests sectors/track instead of the error bit, so', 13, 10
         db '  cards with 63 sectors/track (most CF cards from 64MB) get size 0.', 13, 10
         db '3 sizecap: HP',39,'s 32-bit card size wraps from 4GB up and HP refuses', 13, 10
@@ -399,6 +483,14 @@ m_crc   db 'OBCBIOS is not a known 425 build. Nothing changed.', 13, 10, '$'
 m_old   db 'Unexpected bytes at a patch site. Nothing changed.', 13, 10, '$'
 m_int   db 'Internal check failed. Nothing changed.', 13, 10, '$'
 m_write db 'WRITE FAILED - the image may be damaged, use your copy.', 13, 10, '$'
+m_mgm   db 'OBMGM.COM 1.03, stock. Option 6, nopopup: OBMGM no longer shows', 13, 10
+        db 'the "Unrecognized Plug-in Card" popup. Other messages stay.', 13, 10, '$'
+m_mgmask db 'Patch it IN PLACE? Keep a copy of the original. (Y/N) $'
+m_mgmok db 'Patched with: nopopup. Reboot to load the new OBMGM.', 13, 10, '$'
+m_mgmhas db 'OBMGM.COM 1.03 already has nopopup. Nothing changed.', 13, 10, '$'
+m_mgmcrc db 'Not the known OBMGM.COM 1.03. Nothing changed.', 13, 10, '$'
+mgmold  db 0F8h, 4Bh, 0FDh, 4Bh       ; selector cases 0 and 1 (popup)
+mgmnew  db 1Dh, 4Ch, 1Dh, 4Ch         ; -> the selector's exit
 m_comma db ', $'
 n1      db 'anycard$'
 n2      db 'sectors63$'

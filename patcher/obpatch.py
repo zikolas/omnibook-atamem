@@ -6,6 +6,7 @@ Usage:
     python3 obpatch.py [options] ROM-IN.IMG ROM-OUT.IMG
     python3 obpatch.py --check ROM.IMG
     python3 obpatch.py --list
+    python3 obpatch.py OBMGM.COM OBMGM-OUT.COM   (nopopup, see --list)
 
 Options (default: all five patches):
     --only NAMES      apply exactly these patches (comma separated)
@@ -40,7 +41,7 @@ OPTIONS = [
      "memory mode for every card maker, not only SanDisk (MANFID 0045). "
      "Needed for any non-SanDisk card: as C: it otherwise runs in I/O mode "
      "(8-bit cards in the user slots lose their odd ports), and in a user "
-     "slot it is otherwise 'Unrecognised'.",
+     "slot it is otherwise 'Unrecognized'.",
      [(0x2E57, b"\x74", b"\xeb"), (0x2E61, b"\x74", b"\xeb")]),
     ("sectors63",
      "fix HP's IDENTIFY check, which tests sectors/track instead of the "
@@ -79,6 +80,47 @@ CRC_TABLE = [
     0xFB7A41FA, 0x981CB210, 0x3B0ADC06, 0x586C2FEC,
     0x06C2FABB, 0x65A40951, 0xC6B26747, 0xA5D494AD,
 ]
+
+
+# OBMGM.COM 1.03 (the OmniBook message manager, loaded by CONFIG.SYS):
+# option 6, nopopup, sends the two "Unrecognized Plug-in Card" cases of its
+# message selector (jump table at file offset 4AE5h) to the selector's exit.
+OBMGM_LEN = 22341
+OBMGM_CRC_STOCK = 0x8AAE549B
+OBMGM_CRC_PATCHED = 0x2F9D6F3B
+OBMGM_SITE = (0x4AE5, b"\xf8\x4b\xfd\x4b", b"\x1d\x4c\x1d\x4c")
+
+
+def patch_obmgm(data, check_only, dst, src):
+    c = crc(data)
+    if c == OBMGM_CRC_PATCHED:
+        print("OBMGM.COM 1.03 already has nopopup (CRC %08X). Nothing to do."
+              % c)
+        return 0
+    if c != OBMGM_CRC_STOCK:
+        print("OBMGM.COM CRC %08X is not the known 1.03 build. Refusing." % c)
+        return 1
+    print("OBMGM.COM 1.03, stock (CRC %08X)" % c)
+    if check_only:
+        return 0
+    if dst == src:
+        print("output must be a different file from the input")
+        return 2
+    off, old, new = OBMGM_SITE
+    out = bytearray(data)
+    if out[off:off + len(old)] != old:
+        print("unexpected bytes at %04Xh, refusing" % off)
+        return 1
+    out[off:off + len(new)] = new
+    if crc(out) != OBMGM_CRC_PATCHED:
+        print("internal error: patched CRC %08X" % crc(out))
+        return 1
+    with open(dst, "wb") as f:
+        f.write(out)
+    print("applied: nopopup")
+    print("wrote %s: %d bytes, CRC-32 %08X" % (dst, len(out), crc(out)))
+    print("Copy it over C:\\OBMGM.COM on the 425 (keep the original).")
+    return 0
 
 
 def crc(data):
@@ -122,7 +164,12 @@ def list_options():
                 line = "   "
             line += " " + w
         print(line)
-    print("\nDefault: all five (the combination tested on hardware).")
+    print("6. nopopup  (applies to OBMGM.COM, not to the ROM image)")
+    print("    stop OBMGM showing the 'Unrecognized Plug-in Card' popup when a")
+    print("    card it does not know is inserted. Other OBMGM messages stay.")
+    print("    Run obpatch.py on C:\\OBMGM.COM to apply it.")
+    print("\nDefault for a ROM image: all five (the combination tested on")
+    print("hardware).")
 
 
 def main(argv):
@@ -154,6 +201,9 @@ def main(argv):
     src = args[0]
     with open(src, "rb") as f:
         img = bytearray(f.read())
+    if len(img) == OBMGM_LEN:
+        return patch_obmgm(bytes(img), check_only,
+                           args[1] if len(args) > 1 else None, src)
     print("image %s: %d bytes, CRC-32 %08X" % (src, len(img), crc(img)))
     found = find_module(img)
     if not found:

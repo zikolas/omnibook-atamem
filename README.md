@@ -97,13 +97,40 @@ With the patch, a card works as a drive when its partition layout suits the
 - one FAT12 or FAT16 partition, type 01 or 06 (types 07, 0E and EE are
   refused), 2GB or smaller,
 - the partition marked active (boot flag 80h); without it HP's software
-  pops up "Unrecognised" and the slot stays dead,
+  pops up "Unrecognized" and the slot stays dead,
 - a DOS-style boot sector. A FAT16 volume with 6 reserved sectors and 255
   heads (a later-Windows layout) was rejected with "Invalid media type"; the
   same card reformatted with 1 reserved sector works.
 
 FAT32, exFAT and GPT cards need repartitioning and a FAT16 format first.
 Cards larger than 2GB work with a 2GB partition at the start.
+
+## Option 6: no "Unrecognized Plug-in Card" popup
+
+A separate, optional patch for `C:\OBMGM.COM`, the HP message manager that
+shows a popup when a card it does not know is inserted. With third-party
+sound, MIDI or serial cards and their enablers, that popup comes up on every
+insertion even though the card works. Option 6 (`nopopup`) changes 4 bytes so
+OBMGM skips that one message; its other messages stay. It is a file on C:,
+not part of the ROM card, so it can be applied with or without the ROM patch.
+
+Unlike the ROM card, this file can be patched on the 425 itself. Copy
+OBPATCH.COM to the 425 (for example on a CF card in a user slot), back up
+OBMGM.COM and run OBPATCH there:
+
+    COPY C:\OBMGM.COM C:\OBMGM.ORG
+    OBPATCH C:\OBMGM.COM
+
+OBPATCH asks Y/N before it writes, then patches the file in place. Reboot to
+load the new copy. Alternatively, copy OBMGM.COM to a modern machine,
+patch it there and copy the result back to C:\:
+
+    python3 patcher/obpatch.py OBMGM.COM OBMGM-P.COM
+
+Both patchers accept only OBMGM 1.03 (22,341 bytes, CRC-32 8AAE549B; patched
+2F9D6F3B). To undo it, copy your backup (or `OBMGM.COM` from
+D:) back to C:\. With the patch, a card HP rejects shows no message; the
+slot just stays empty.
 
 Setting a card up as C: (HP's first-boot format prompt, OBSETUP, and the
 OBBOOT settings that turn the Flash File System and DoubleSpace on and off)
@@ -118,6 +145,7 @@ is covered in [doc/C-DRIVE.md](doc/C-DRIVE.md).
 | 3 sizecap | 2D1Fh-2D4Fh, 2F9Ah-2FA9h | Rewrite the IDENTIFY geometry read more compactly, add a clamp, and cap the recorded size just under 2GB. HP's 32-bit size wraps on large cards and HP checks every access against it. |
 | 4 nopowerdown | 2BF4h | Stop setting the card's power-down bit after 5 seconds idle. Some cards (Transcend) stay busy after HP wakes them. |
 | 5 nosetfeatures | 2DBAh | Skip two SanDisk vendor SET FEATURES commands (69h, 97h). An IBM Microdrive aborts every media command after them. |
+| 6 nopopup | OBMGM.COM file offset 4AE5h | Send the two "Unrecognized Plug-in Card" cases of OBMGM's message selector to its exit. |
 
 The full analysis, with the evidence for each change, is in
 [doc/FINDINGS.md](doc/FINDINGS.md). The DOS probes used for the work are in
@@ -125,7 +153,8 @@ The full analysis, with the evidence for each change, is in
 
 ## Status
 
-Version 1.0 (obpatch.py and OBPATCH 1.0), experimental. Known gaps:
+Version 1.1 (obpatch.py and OBPATCH 1.1), experimental. 1.1 adds option 6.
+Known gaps:
 
 - The German `1.1S ABD` card is untested. The patcher checks the module CRC
   and will refuse it if it differs.
@@ -134,6 +163,10 @@ Version 1.0 (obpatch.py and OBPATCH 1.0), experimental. Known gaps:
   OBCBIOS code runs.
 - Combinations other than all five have been checked byte for byte between
   the Python and DOS patchers but not booted.
+- Option 6 has been tested on one 425 with one card: OBPATCH 1.1 patched
+  C:\OBMGM.COM on the 425, and after a reboot an SCP-55 removed and
+  re-inserted with the machine on gave no popup and still enabled with
+  SCP55GO.
 - HP's per-sector error check during reads and writes can never fire (it
   uses `test` and then `jc`). A sector the card reports as bad reaches DOS
   as data. The patch does not change this.
