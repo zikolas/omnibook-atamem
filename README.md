@@ -23,6 +23,8 @@ two user slots. PC Card hard disks stay in I/O mode (see Status).
   smaller.
 - Option 6, separate and optional: a 4-byte patch to `C:\OBMGM.COM` that
   stops the "Unrecognized Plug-in Card" popup. It runs on the 425.
+- Option 7, optional: one byte in ROM DOS so OBMGM can be left out of
+  CONFIG.SYS (about 20K) without the 425 rebooting from drive D.
 
 This patch is experimental and has seen limited testing: one OmniBook 425,
 one ROM card build, one card booted as C: in memory mode, and 15 cards tried
@@ -152,6 +154,26 @@ Both patchers accept only OBMGM 1.03 (22,341 bytes, CRC-32 8AAE549B; patched
 D:) back to C:\. With the patch, a card HP rejects shows no message; the
 slot just stays empty.
 
+## Option 7: no OBMGM check in ROM DOS
+
+The 425's ROM DOS checks, after CONFIG.SYS, that OBMGM.COM is resident. If
+it is not, it prints "OBMGM.COM not loaded. Booting from drive D instead.",
+sets the boot drive to D: and reboots. So OBMGM (about 20K) cannot simply be
+left out of CONFIG.SYS. Option 7 (`noobmgm`) removes that check with one byte
+in the ROM card image. It is not part of the default set:
+
+    python3 patcher/obpatch.py --only anycard,sectors63,sizecap,nopowerdown,nosetfeatures,noobmgm ROM425.IMG ROM425-P.IMG
+    python3 patcher/obpatch.py --only noobmgm ROM425-P.IMG ROM425-P7.IMG
+
+The second form adds option 7 to an image that already has options 1-5.
+On DOS, OBPATCH shows option 7 in its menu (key 7) and offers to add it to
+an already patched image. Both patchers need the stock 425 ROM DOS (DOSHI
+module CRC-32 0C4872EF; patched F89B2143).
+
+Without OBMGM there is no popup for unknown cards (option 6 is not needed),
+no power status in the top right corner of the screen and no COM port
+banner at boot.
+
 Setting a card up as C: (HP's first-boot format prompt, OBSETUP, and the
 OBBOOT settings that turn the Flash File System and DoubleSpace on and off)
 is covered in [doc/C-DRIVE.md](doc/C-DRIVE.md).
@@ -166,6 +188,7 @@ is covered in [doc/C-DRIVE.md](doc/C-DRIVE.md).
 | 4 nopowerdown | 2BF4h | Stop setting the card's power-down bit after 5 seconds idle. Some cards (Transcend) stay busy after HP wakes them. |
 | 5 nosetfeatures | 2DBAh | Skip two SanDisk vendor SET FEATURES commands (69h, 97h). An IBM Microdrive aborts every media command after them. |
 | 6 nopopup | OBMGM.COM file offset 4AE5h | Send the two "Unrecognized Plug-in Card" cases of OBMGM's message selector to its exit. |
+| 7 noobmgm | DOSHI module offset 1BAFh (card 809BAFh) | Make ROM DOS's OBMGM residency check return at once (B5h -> C3h, a literal in the compressed stream). |
 
 The full analysis, with the evidence for each change, is in
 [doc/FINDINGS.md](doc/FINDINGS.md). The DOS probes used for the work are in
@@ -173,7 +196,8 @@ The full analysis, with the evidence for each change, is in
 
 ## Status
 
-Version 1.1 (obpatch.py and OBPATCH 1.1), experimental. 1.1 adds option 6.
+Version 1.2 (obpatch.py and OBPATCH 1.2), experimental. 1.1 added option 6,
+1.2 adds option 7.
 Known gaps:
 
 - The German `1.1S ABD` card is untested. The patcher checks the module CRC
@@ -187,6 +211,11 @@ Known gaps:
   C:\OBMGM.COM on the 425, and after a reboot an SCP-55 removed and
   re-inserted with the machine on gave no popup and still enabled with
   SCP55GO.
+- Option 7 has been tested on one 425: OBPATCH 1.2 on another machine
+  patched a copy of the ROM card dump with options 1-5 and 7, LINGO wrote
+  it to a PRETEC FR2016 (image CRC-32 1217C46B, the same as obpatch.py),
+  and the 425 then booted from C: with OBMGM left out of CONFIG.SYS, with
+  no reboot to drive D.
 - PC Card hard disks stay in 16-bit I/O mode, so the odd-register problem
   remains with them. A Maxtor MXL-105-III (HP's 105MB option for the
   OmniBook 430) ran 16-bit I/O on the stock and the patched 425 ROM card,

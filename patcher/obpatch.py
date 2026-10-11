@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """obpatch.py - patch the OBCBIOS module in an HP OmniBook 425 ROM card image
-so PC Card ATA / CompactFlash cards run in memory mode.
+so PC Card ATA / CompactFlash cards run in memory mode (options 1-5), and
+optionally ROM DOS's OBMGM check (option 7).
 
 Usage:
     python3 obpatch.py [options] ROM-IN.IMG ROM-OUT.IMG
@@ -8,9 +9,11 @@ Usage:
     python3 obpatch.py --list
     python3 obpatch.py OBMGM.COM OBMGM-OUT.COM   (nopopup, see --list)
 
-Options (default: all five patches):
+Options (default: the five OBCBIOS patches):
     --only NAMES      apply exactly these patches (comma separated)
-    --without NAMES   apply all patches except these
+    --without NAMES   apply the default patches except these
+    noobmgm (ROM DOS) is not in the default; add it with --only, e.g.
+    --only anycard,sectors63,sizecap,nopowerdown,nosetfeatures,noobmgm
 
 The input is a dump of the 425's ROM card (for example made with LINGO).
 The patcher finds OBCBIOS through the card's own directory, checks it is the
@@ -66,7 +69,20 @@ OPTIONS = [
      "power saving) is not known.",
      [(0x2DBA, b"\x80\x7c", b"\xeb\x1f")]),
 ]
-NAMES = [o[0] for o in OPTIONS]
+NAMES = [o[0] for o in OPTIONS] + ["noobmgm"]
+OBC_MASK = (1 << len(OPTIONS)) - 1          # the OBCBIOS parts (bits 0-4)
+NOOBMGM = 1 << len(OPTIONS)                 # option 7 (bit 5)
+DEFAULT_MASK = OBC_MASK
+
+# Option 7, noobmgm: ROM DOS (the DOSHI module, an SZDD-compressed stream)
+# checks after CONFIG.SYS that OBMGM.COM is resident and otherwise reboots
+# from drive D.  The check routine's first byte is stored as a literal in the
+# compressed stream, so one byte turns it into a RET.
+DOSHI_NAME = b"DOSHI\0\0\0"
+DOSHI_LEN = 0x7000
+DOSHI_CRC_STOCK = 0x0C4872EF
+DOSHI_CRC_PATCHED = 0xF89B2143
+DOSHI_SITE = (0x1BAF, b"\xb5", b"\xc3")
 
 # Module CRC-32 for every combination; index bit n = OPTIONS[n] applied.
 # Index 0 is the stock module (US 1.1S ABA and UK 1.1S ABB cards).
@@ -131,13 +147,13 @@ def mask_names(mask):
     return ", ".join(n for i, n in enumerate(NAMES) if mask >> i & 1) or "none"
 
 
-def find_module(img):
+def find_module(img, name=MOD_NAME):
     off = DIR_TOP
     while off >= DIR_FLOOR and off + 16 <= len(img):
         ent = img[off:off + 16]
         if ent[0] == 0:
             break
-        if ent[:8] == MOD_NAME:
+        if ent[:8] == name:
             start, = struct.unpack_from("<I", ent, 8)
             length, = struct.unpack_from("<H", ent, 12)
             return start, length
@@ -168,12 +184,16 @@ def list_options():
     print("    stop OBMGM showing the 'Unrecognized Plug-in Card' popup when a")
     print("    card it does not know is inserted. Other OBMGM messages stay.")
     print("    Run obpatch.py on C:\\OBMGM.COM to apply it.")
-    print("\nDefault for a ROM image: all five (the combination tested on")
+    print("7. noobmgm  (ROM DOS, not part of the default)")
+    print("    ROM DOS reboots from drive D when OBMGM.COM is not resident")
+    print("    after CONFIG.SYS. This removes that check, so CONFIG.SYS can")
+    print("    leave OBMGM out (about 20K more memory) without other tools.")
+    print("\nDefault for a ROM image: options 1-5 (the combination tested on")
     print("hardware).")
 
 
 def main(argv):
-    args, mask, check_only = [], (1 << len(OPTIONS)) - 1, False
+    args, mask, check_only = [], DEFAULT_MASK, False
     it = iter(argv)
     for a in it:
         if a == "--list":
@@ -184,7 +204,7 @@ def main(argv):
         elif a == "--only":
             mask = parse_names(next(it, ""))
         elif a == "--without":
-            mask = ((1 << len(OPTIONS)) - 1) & ~parse_names(next(it, ""))
+            mask = DEFAULT_MASK & ~parse_names(next(it, ""))
         elif a.startswith("--"):
             print("unknown option %s" % a)
             return 2
@@ -225,38 +245,74 @@ def main(argv):
     if have:
         print("OBCBIOS is already patched (CRC %08X): %s"
               % (mcrc, mask_names(have)))
-        if not check_only:
-            print("To apply a different set, start from the original dump.")
-        return 0
-    print("OBCBIOS is the stock 425 build (CRC %08X)" % mcrc)
+    else:
+        print("OBCBIOS is the stock 425 build (CRC %08X)" % mcrc)
+
+    dfound = find_module(img, DOSHI_NAME)
+    dcrc = None
+    if dfound and dfound[1] == DOSHI_LEN and \
+            dfound[0] + DOSHI_LEN <= len(img):
+        dstart = dfound[0]
+        dcrc = crc(bytes(img[dstart:dstart + DOSHI_LEN]))
+    if dcrc == DOSHI_CRC_PATCHED:
+        print("ROM DOS already has noobmgm (DOSHI CRC %08X)" % dcrc)
+    elif dcrc == DOSHI_CRC_STOCK:
+        print("ROM DOS is the stock 425 build (DOSHI CRC %08X)" % dcrc)
+    else:
+        print("ROM DOS (DOSHI) is not a known build: noobmgm unavailable")
     if check_only:
         return 0
+
+    obc = mask & OBC_MASK
+    want_doshi = bool(mask & NOOBMGM)
     if mask == 0:
         print("no patches selected, nothing written")
         return 2
+    if obc and have and obc != have:
+        print("OBCBIOS already has a different set of patches.")
+        print("To apply a different set, start from the original dump.")
+        return 1
+    if want_doshi and dcrc not in (DOSHI_CRC_STOCK, DOSHI_CRC_PATCHED):
+        print("noobmgm needs the stock 425 ROM DOS. Refusing.")
+        return 1
+    do_obc = obc and not have
+    do_doshi = want_doshi and dcrc == DOSHI_CRC_STOCK
+    if not do_obc and not do_doshi:
+        print("the image already has the selected patches, nothing written")
+        return 0
     dst = args[1]
     if dst == src:
         print("output must be a different file from the input")
         return 2
 
-    out = bytearray(mod)
-    for i, (_, _, sites) in enumerate(OPTIONS):
-        if not mask >> i & 1:
-            continue
-        for moff, old, new in sites:
-            if old is not None and out[moff:moff + len(old)] != old:
-                print("unexpected bytes at module %04Xh, refusing" % moff)
-                return 1
-            out[moff:moff + len(new)] = new
-    if crc(out) != CRC_TABLE[mask]:
-        print("internal error: patched CRC %08X, expected %08X"
-              % (crc(out), CRC_TABLE[mask]))
-        return 1
-    img[start:start + length] = out
+    if do_obc:
+        out = bytearray(mod)
+        for i, (_, _, sites) in enumerate(OPTIONS):
+            if not obc >> i & 1:
+                continue
+            for moff, old, new in sites:
+                if old is not None and out[moff:moff + len(old)] != old:
+                    print("unexpected bytes at module %04Xh, refusing" % moff)
+                    return 1
+                out[moff:moff + len(new)] = new
+        if crc(out) != CRC_TABLE[obc]:
+            print("internal error: patched CRC %08X, expected %08X"
+                  % (crc(out), CRC_TABLE[obc]))
+            return 1
+        img[start:start + length] = out
+        print("OBCBIOS: applied %s, CRC %08X" % (mask_names(obc), crc(out)))
+    if do_doshi:
+        doff, old, new = DOSHI_SITE
+        if img[dstart + doff:dstart + doff + len(old)] != old:
+            print("unexpected bytes in ROM DOS, refusing")
+            return 1
+        img[dstart + doff:dstart + doff + len(new)] = new
+        if crc(bytes(img[dstart:dstart + DOSHI_LEN])) != DOSHI_CRC_PATCHED:
+            print("internal error: patched DOSHI CRC mismatch")
+            return 1
+        print("ROM DOS: applied noobmgm, DOSHI CRC %08X" % DOSHI_CRC_PATCHED)
     with open(dst, "wb") as f:
         f.write(img)
-    print("applied: %s" % mask_names(mask))
-    print("patched OBCBIOS CRC %08X" % CRC_TABLE[mask])
     print("wrote %s: %d bytes, CRC-32 %08X" % (dst, len(img), crc(img)))
     return 0
 

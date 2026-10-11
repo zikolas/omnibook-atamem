@@ -307,4 +307,28 @@ before. The only change is that a card HP rejects (for example a CF card
 with an inactive or type 07 partition, section 9) no longer says so; the
 slot just stays empty.
 
+## 14. ROM DOS: the OBMGM check (option 7)
+
+The ROM card directory (F000:7FF0 = card 7F7FF0h, read downward) lists
+BIOS0, DOSHI, OBCBIOS, OBSMIBIN, PRECONF0-PRECONF3, MRCI, MS-FLASH, DBLSPACE
+and DSSWAP. PRECONF0-3 are the CONFIG.SYS lines ROM DOS processes for each
+OBBOOT option (0: MRCI, MS-FLASH, DBLSPACE.BIN, DSSWAP; 1: MRCI,
+DBLSPACE.BIN, DSSWAP; 2: MRCI, MS-FLASH; 3: none). None of them loads
+OBMGM; on the 425 it comes from C:\CONFIG.SYS only.
+
+DOSHI (card 808000h, 7000h bytes) starts with a Microsoft SZDD stream of
+31,152 bytes: the ROM version of the DOS I/O system and SYSINIT. In it,
+SYSINIT (segment base 2B60h in the decoded stream) calls a routine at
+decoded offset 35B6h just before it starts the shell. The routine walks the
+INT 2Fh multiplex IDs from C0h: an ID that answers its installation check
+is asked for function 50h with BX = 4C53h, and OBMGM answers with 4C53h. If
+none does, it prints "OBMGM.COM not loaded. Booting from drive D instead.",
+waits about two seconds, writes 04h into CMOS index 74h (the OBBOOT setting)
+and jumps to FFFF:0000.
+
+The routine's first byte (B5h) is stored as a literal at DOSHI offset 1BAFh
+and no later match in the stream copies it, so replacing it with C3h (RET)
+in the compressed data changes only that byte of the decoded output. The
+routine has one caller.
+
 [lingo-ob]: https://github.com/zikolas/lingo/blob/main/doc/OMNIBOOK.md

@@ -13,8 +13,13 @@
 ; Given OBMGM.COM 1.03 (22341 bytes, CRC-32 8AAE549B) instead, it offers
 ; option 6, nopopup: no "Unrecognized Plug-in Card" popup (4 bytes).
 ;
+; Option 7, noobmgm, patches ROM DOS (the DOSHI module, CRC-32 0C4872EF):
+; one byte in its SZDD stream turns the "OBMGM.COM not loaded, booting from
+; drive D" check into a RET.  Off by default; also offered for an image whose
+; OBCBIOS is already patched.
+;
 ; Build: nasm -f bin -o OBPATCH.COM OBPATCH.ASM        (runs on a 386 or later)
-; Test builds: -DTESTMASK=n patches combination n (bit mask 1-31) without
+; Test builds: -DTESTMASK=n patches combination n (bit mask 1-63) without
 ; prompts; -DDIR_TOP=x -DDIR_FLOOR=y moves the directory search for small
 ; stand-in images. Release builds use neither.
         cpu 386
@@ -27,6 +32,8 @@ DIR_FLOOR equ 7F4000h
 MOD_LEN   equ 3A2Bh
 NOPT      equ 5
 MGM_LEN   equ 22341
+DOSHI_LEN equ 7000h
+DOSHI_SITE equ 1BAFh               ; RET for SYSINIT's OBMGM check (literal)
 MGM_SITE  equ 4AE5h
 
 start:
@@ -105,14 +112,39 @@ start:
         cmp  bx, 32
         jb   .lk
         jmp  e_crc
-.known: or   bx, bx
+.known: push bx
+        call doshi_probe              ; ROM DOS state -> [dstate]
+        pop  bx
+        or   bx, bx
         jz   .stock
-        mov  dx, m_already            ; already patched: list and stop
+        mov  dx, m_already            ; already patched: list, offer 7
         call say
         mov  [mask], bl
         call saynames
+        cmp  byte [dstate], 1
+        je   .add7
         mov  dx, m_redo
+        cmp  byte [dstate], 2
+        jne  close0
+        mov  dx, m_has7
         jmp  close0
+.add7:
+%ifndef TESTMASK
+        mov  dx, m_ask7
+        call say
+.yn7:   mov  ah, 0
+        int  16h
+        and  al, 0DFh
+        cmp  al, 'N'
+        je   e_quit
+        cmp  al, 'Y'
+        jne  .yn7
+        mov  dx, crlf
+        call say
+%endif
+        call patch7
+        mov  byte [mask], 20h
+        jmp  finish
 .stock:
         mov  dx, m_stock
         call say
@@ -150,10 +182,26 @@ menu:   call cls
         cmp  bx, NOPT
         jb   .ol
         mov  dx, m_keys
+        cmp  byte [dstate], 1         ; option 7 only for a stock ROM DOS
+        jne  .k
+        mov  al, ' '
+        test byte [mask], 20h
+        jz   .o7
+        mov  al, 'x'
+.o7:    mov  [m_o7+4], al
+        mov  dx, m_o7
         call say
+        mov  dx, m_keys7
+.k:     call say
 .key:   mov  ah, 0
         int  16h
-        cmp  al, '1'
+        cmp  al, '7'
+        jne  .n7
+        cmp  byte [dstate], 1
+        jne  .key
+        xor  byte [mask], 20h
+        jmp  menu
+.n7:    cmp  al, '1'
         jb   .let
         cmp  al, '5'
         ja   .let
@@ -232,6 +280,7 @@ dopatch:
 .pd:
         call crcbuf
         movzx bx, byte [mask]
+        and  bx, 1Fh                  ; OBCBIOS parts only
         shl  bx, 2
         cmp  eax, [crctab+bx]
         jne  e_int
@@ -246,7 +295,10 @@ dopatch:
         jc   e_write
         cmp  ax, MOD_LEN
         jne  e_write
-        mov  ah, 3Eh
+        test byte [mask], 20h
+        jz   finish
+        call patch7
+finish: mov  ah, 3Eh
         mov  bx, [handle]
         int  21h
         jc   e_write
@@ -255,6 +307,76 @@ dopatch:
         call saynames
         mov  dx, m_lingo
         jmp  out0
+
+; --- option 7: ROM DOS (DOSHI) ---------------------------------------------
+; doshi_probe: find DOSHI in the card directory, read it into dbuf and set
+; [dstate] = 1 stock, 2 already patched, 0 not found / unknown.
+doshi_probe:
+        mov  byte [dstate], 0
+        mov  dword [dirpos], DIR_TOP
+.d:     mov  eax, [dirpos]
+        cmp  eax, DIR_FLOOR
+        jb   .x
+        call seek
+        jc   .x
+        mov  cx, 16
+        mov  dx, ent
+        call read
+        jc   .x
+        cmp  byte [ent], 0
+        je   .x
+        mov  si, ent
+        mov  di, doshiname
+        mov  cx, 8
+        repe cmpsb
+        je   .f
+        sub  dword [dirpos], 16
+        jmp  .d
+.f:     cmp  word [ent+12], DOSHI_LEN
+        jne  .x
+        mov  eax, [ent+8]
+        mov  [dpos], eax
+        call seek
+        jc   .x
+        mov  cx, DOSHI_LEN
+        mov  dx, dbuf
+        call read
+        jc   .x
+        mov  si, dbuf
+        mov  cx, DOSHI_LEN
+        call crcsi
+        cmp  eax, 0C4872EFh
+        jne  .p
+        mov  byte [dstate], 1
+        ret
+.p:     cmp  eax, 0F89B2143h
+        jne  .x
+        mov  byte [dstate], 2
+.x:     ret
+
+; patch7: dbuf holds the stock DOSHI; patch it, check the CRC, write the byte.
+patch7:
+        cmp  byte [dbuf+DOSHI_SITE], 0B5h
+        jne  e_old
+        mov  byte [dbuf+DOSHI_SITE], 0C3h
+        mov  si, dbuf
+        mov  cx, DOSHI_LEN
+        call crcsi
+        cmp  eax, 0F89B2143h
+        jne  e_int
+        mov  eax, [dpos]
+        add  eax, DOSHI_SITE
+        call seek
+        jc   e_write
+        mov  ah, 40h
+        mov  bx, [handle]
+        mov  cx, 1
+        mov  dx, retbyte
+        int  21h
+        jc   e_write
+        cmp  ax, 1
+        jne  e_write
+        ret
 
 ; --- OBMGM.COM: option 6, nopopup ----------------------------------------
 mgm:    xor  eax, eax
@@ -342,6 +464,7 @@ crcbuf:                               ; EAX = CRC-32 of buf[0..MOD_LEN)
         mov  cx, MOD_LEN
 crcn:                                 ; EAX = CRC-32 of buf[0..CX)
         mov  si, buf
+crcsi:                                ; EAX = CRC-32 of [SI..SI+CX)
         mov  edx, 0FFFFFFFFh
 .b:     lodsb
         xor  dl, al
@@ -391,7 +514,7 @@ saynames:                             ; "  anycard, sizecap ..." for [mask]
         mov  dx, [names+si]
         call say
 .nx:    inc  bx
-        cmp  bx, NOPT
+        cmp  bx, NOPT+1
         jb   .n
         mov  dx, crlf
         jmp  say
@@ -438,7 +561,7 @@ out0:   call say
         int  21h
 
 ; --- text (every printed line fits 79 columns) ----------------------------
-m_title db 'OBPATCH 1.1 - HP OmniBook 425 ROM card: ATA cards in memory mode'
+m_title db 'OBPATCH 1.2 - HP OmniBook 425 ROM card: ATA cards in memory mode'
 crlf    db 13, 10, '$'
 m_use   db 'Usage: OBPATCH romcard.img   (patches the file in place)', 13, 10
         db '       OBPATCH C:\OBMGM.COM  (option 6: no unrecognized-card popup)', 13, 10
@@ -454,6 +577,10 @@ m_o3    db ' 3 [x] sizecap       cards of 4GB and up: size capped at 2GB        
 m_o4    db ' 4 [x] nopowerdown   no idle power-down (Transcend fix, costs battery) ', 13, 10, '$'
 m_o5    db ' 5 [x] nosetfeatures skip SanDisk SET FEATURES (IBM Microdrive fix)    ', 13, 10, '$'
 m_keys  db 13, 10, '1-5 toggle, H help, P patch, Q quit: $'
+m_keys7 db 13, 10, '1-5 and 7 toggle, H help, P patch, Q quit: $'
+m_o7    db ' 7 [ ] noobmgm       ROM DOS: no reboot to drive D when OBMGM is absent', 13, 10, '$'
+m_ask7  db 'Add option 7, noobmgm (no OBMGM check in ROM DOS)? (Y/N) $'
+m_has7  db 'ROM DOS already has option 7, noobmgm.', 13, 10, '$'
 m_help  db '1 anycard: without it, only SanDisk cards get memory mode. Other', 13, 10
         db '  cards run C: in I/O mode (8-bit cards lose odd ports) and are', 13, 10
         db '  "Unrecognized" in the user slots.', 13, 10
@@ -465,6 +592,8 @@ m_help  db '1 anycard: without it, only SanDisk cards get memory mode. Other', 1
         db '  idle power-down. Cards then draw more power while idle.', 13, 10
         db '5 nosetfeatures: the IBM Microdrive aborts everything after these', 13, 10
         db '  SanDisk commands. Their effect on SanDisk cards is not known.', 13, 10
+        db '7 noobmgm: ROM DOS reboots from drive D when OBMGM.COM is not', 13, 10
+        db '  resident. With this, CONFIG.SYS can leave OBMGM out (~20K).', 13, 10
         db 'Recommended: 1-3 always; 4 and 5 if you use those cards.', 13, 10
         db 'Experimental, limited testing: keep your original ROM card.', 13, 10
         db 13, 10, 'Press a key to go back to the menu.$'
@@ -497,7 +626,10 @@ n2      db 'sectors63$'
 n3      db 'sizecap$'
 n4      db 'nopowerdown$'
 n5      db 'nosetfeatures$'
-names   dw n1, n2, n3, n4, n5
+n6      db 'noobmgm$'
+names   dw n1, n2, n3, n4, n5, n6
+doshiname db 'DOSHI', 0, 0, 0
+retbyte db 0C3h
 modname db 'OBCBIOS', 0
 
 ; Module CRC-32 per combination, index bit n = option n+1. 0 = stock.
@@ -545,9 +677,12 @@ patches:
 handle  dw 0
 dirpos  dd 0
 modoff  dd 0
+dpos    dd 0
+dstate  db 0
 fnend   dw 0
 mask    db 1Fh, 0                     ; all on by default (bt needs a word)
 first   db 0
 ent     times 16 db 0
 fname   times 80 db 0
 buf:
+dbuf    equ buf + 3A30h               ; DOSHI copy (after the OBCBIOS buffer)
