@@ -22,9 +22,9 @@ two user slots. PC Card hard disks stay in I/O mode (see Status).
 - Cards: MBR, one active FAT12/FAT16 partition (type 01 or 06), 2GB or
   smaller.
 - OBMGM, HP's message manager, two optional patches (use either or both):
-  option 7 (ROM card) lets CONFIG.SYS leave OBMGM out (about 20K) without
-  the 425 rebooting from drive D; option 6 (`C:\OBMGM.COM`, patched on the
-  425) stops its "Unrecognized Plug-in Card" popup when it is loaded.
+  option 6 (`C:\OBMGM.COM`, patched on the 425) stops its "Unrecognized
+  Plug-in Card" popup; option 7 (ROM card) lets CONFIG.SYS leave OBMGM out
+  (about 20K) without the 425 rebooting from drive D.
 
 This patch is experimental and has seen limited testing: one OmniBook 425,
 one ROM card build, one card booted as C: in memory mode, and 15 cards tried
@@ -127,41 +127,24 @@ With the patch, a card works as a drive when its partition layout suits the
 FAT32, exFAT and GPT cards need repartitioning and a FAT16 format first.
 Cards larger than 2GB work with a 2GB partition at the start.
 
-## OBMGM: optional (option 7) and quiet (option 6)
+## OBMGM: quiet (option 6) and optional (option 7)
 
 OBMGM.COM is HP's message manager. CONFIG.SYS loads it from C:, and it
 shows the power status in the top right corner of the screen, the COM port
 banner at boot and popups for PC Card events. Two separate patches change
 how it behaves; use either or both:
 
-- Option 7 (`noobmgm`, ROM card) makes OBMGM optional. Without it, ROM DOS
-  reboots from drive D whenever OBMGM is not loaded, so it cannot be left
-  out of CONFIG.SYS.
 - Option 6 (`nopopup`, `C:\OBMGM.COM`) keeps OBMGM but stops its
   "Unrecognized Plug-in Card" popup, which comes up on every insertion of a
   third-party sound, MIDI or serial card even though the card works.
+- Option 7 (`noobmgm`, ROM card) makes OBMGM optional. Without it, ROM DOS
+  reboots from drive D whenever OBMGM is not loaded, so it cannot be left
+  out of CONFIG.SYS.
 
 With both, OBMGM can be loaded when its power display is wanted, without
 the popups, and left out (about 20K) when the memory matters more.
-
-### Option 7: no OBMGM check in ROM DOS
-
-After CONFIG.SYS, the 425's ROM DOS checks that OBMGM.COM is resident. If it
-is not, it prints "OBMGM.COM not loaded. Booting from drive D instead.",
-sets the boot drive to D: and reboots. Option 7 removes that check with one
-byte in the ROM card image. It is not part of the default set:
-
-    python3 patcher/obpatch.py --only anycard,sectors63,sizecap,nopowerdown,nosetfeatures,noobmgm ROM425.IMG ROM425-P.IMG
-    python3 patcher/obpatch.py --only noobmgm ROM425-P.IMG ROM425-P7.IMG
-
-The second form adds option 7 to an image that already has options 1-5.
-On DOS, OBPATCH shows option 7 in its menu (key 7) and offers to add it to
-an already patched image. Both patchers need the stock 425 ROM DOS (DOSHI
-module CRC-32 0C4872EF; patched F89B2143). Write the image to the ROM card
-as for options 1-5.
-
-Without OBMGM loaded there is no power status display, no COM port banner
-and no popup for unknown cards.
+What OBMGM does, and what goes with it (including the low-battery
+warning), is listed in [doc/OBMGM.md](doc/OBMGM.md).
 
 ### Option 6: no "Unrecognized Plug-in Card" popup
 
@@ -186,6 +169,25 @@ Both patchers accept only OBMGM 1.03 (22,341 bytes, CRC-32 8AAE549B; patched
 2F9D6F3B). To undo it, copy your backup (or `OBMGM.COM` from D:) back to
 C:\. With the patch, a card HP rejects shows no message; the slot just
 stays empty.
+
+### Option 7: no OBMGM check in ROM DOS
+
+After CONFIG.SYS, the 425's ROM DOS checks that OBMGM.COM is resident. If it
+is not, it prints "OBMGM.COM not loaded. Booting from drive D instead.",
+sets the boot drive to D: and reboots. Option 7 removes that check with one
+byte in the ROM card image. It is not part of the default set:
+
+    python3 patcher/obpatch.py --only anycard,sectors63,sizecap,nopowerdown,nosetfeatures,noobmgm ROM425.IMG ROM425-P.IMG
+    python3 patcher/obpatch.py --only noobmgm ROM425-P.IMG ROM425-P7.IMG
+
+The second form adds option 7 to an image that already has options 1-5.
+On DOS, OBPATCH shows option 7 in its menu (key 7) and offers to add it to
+an already patched image. Both patchers need the stock 425 ROM DOS (DOSHI
+module CRC-32 0C4872EF; patched F89B2143). Write the image to the ROM card
+as for options 1-5.
+
+Without OBMGM loaded there is no power status display, no COM port banner
+and no popup for unknown cards.
 
 Setting a card up as C: (HP's first-boot format prompt, OBSETUP, and the
 OBBOOT settings that turn the Flash File System and DoubleSpace on and off)
